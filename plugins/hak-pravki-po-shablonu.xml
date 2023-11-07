@@ -1,0 +1,582 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dleplugin>
+	<name>Хак  «Правки по шаблону»</name>
+	<description></description>
+	<icon></icon>
+	<version></version>
+	<dleversion></dleversion>
+	<versioncompare>==</versioncompare>
+	<upgradeurl></upgradeurl>
+	<filedelete>0</filedelete>
+	<needplugin></needplugin>
+	<mnotice>0</mnotice>
+	<mysqlinstall><![CDATA[]]></mysqlinstall>
+	<mysqlupgrade><![CDATA[]]></mysqlupgrade>
+	<mysqlenable><![CDATA[]]></mysqlenable>
+	<mysqldisable><![CDATA[]]></mysqldisable>
+	<mysqldelete><![CDATA[]]></mysqldelete>
+	<phpinstall><![CDATA[]]></phpinstall>
+	<phpupgrade><![CDATA[]]></phpupgrade>
+	<phpenable><![CDATA[]]></phpenable>
+	<phpdisable><![CDATA[]]></phpdisable>
+	<phpdelete><![CDATA[]]></phpdelete>
+	<notice><![CDATA[]]></notice>
+	<file name="engine/modules/main.php">
+		<operation action="after">
+			<searchcode><![CDATA[$tpl->set ( '{login}', $tpl->result['login_panel'] );]]></searchcode>
+			<replacecode><![CDATA[$tpl->set ( '{login-mobile}', $tpl->result['login-mobile'] );]]></replacecode>
+			<enabled>1</enabled>
+		</operation>
+	</file>
+	<file name="engine/init.php">
+		<operation action="after">
+			<searchcode><![CDATA[$tpl->load_template( 'login.tpl' );
+
+$tpl->set( '{login-method}', $config['auth_metod'] ? "E-Mail:" : $lang['login_metod'] );
+$tpl->set( '{registration-link}', $PHP_SELF . "?do=register" );
+$tpl->set( '{lostpassword-link}', $PHP_SELF . "?do=lostpassword" );
+$tpl->set( '{logout-link}', $PHP_SELF . "?action=logout" );
+$tpl->set( '{pm-link}', $PHP_SELF . "?do=pm" );
+$tpl->set( '{group}', $user_group[$member_id['user_group']]['group_prefix'].$user_group[$member_id['user_group']]['group_name'].$user_group[$member_id['user_group']]['group_suffix'] );
+
+if ($is_logged) {
+
+	$tpl->set( '{login}', $member_id['name'] );
+	$tpl->set( '{new-pm}', $member_id['pm_unread'] );
+	$tpl->set( '{all-pm}', $member_id['pm_all'] );
+
+	if ($member_id['favorites']) {
+	    $tpl->set( '{favorite-count}', count(explode("," ,$member_id['favorites'])) );
+	} else $tpl->set( '{favorite-count}', '0' );
+
+	if ( count(explode("@", $member_id['foto'])) == 2 ) {
+		
+		$tpl->set( '{foto}', 'https://www.gravatar.com/avatar/' . md5(trim($member_id['foto'])) . '?s=' . intval($user_group[$member_id['user_group']]['max_foto']) );
+		
+	} else {
+		
+		if( $member_id['foto'] ) {
+			
+			if (strpos($member_id['foto'], "//") === 0) $avatar = "http:".$member_id['foto']; else $avatar = $member_id['foto'];
+
+			$avatar = @parse_url ( $avatar );
+
+			if( $avatar['host'] ) {
+				
+				$tpl->set( '{foto}', $member_id['foto'] );
+				
+			} else $tpl->set( '{foto}', $config['http_home_url'] . "uploads/fotos/" . $member_id['foto'] );
+			
+			unset($avatar);
+			
+		} else $tpl->set( '{foto}', "{THEME}/dleimages/noavatar.png" );
+	}
+
+} else {
+	
+	$member_id['name'] ='';
+	$tpl->set( '{login}', '' );
+	$tpl->set( '{new-pm}', '0' );
+	$tpl->set( '{all-pm}', '0' );
+	$tpl->set( '{favorite-count}', '0' );
+	$tpl->set( '{foto}', "{THEME}/dleimages/noavatar.png" );
+
+}
+
+if($config['allow_social'] AND $config['allow_registration']) {
+
+	include_once (ENGINE_DIR . '/data/socialconfig.php');
+
+	if( !isset($_SESSION['state']) OR (isset($_SESSION['state']) AND !$_SESSION['state']) ) $_SESSION['state'] = md5(uniqid(rand(), TRUE));
+
+	if (strpos($config['http_home_url'], "//") === 0) $return_domain = "https:".$config['http_home_url'];
+	elseif (strpos($config['http_home_url'], "/") === 0) $return_domain = "https://".$_SERVER['HTTP_HOST'].$config['http_home_url'];
+	else  $return_domain = $config['http_home_url'];
+	
+	if ( $social_config['vk'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['vkid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=vk",
+			'scope' => 'offline,email',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code',
+			'v'  => '5.90'
+		);
+		
+		$vk_url = 'https://oauth.vk.com/authorize'.'?' . http_build_query($social_params, '', '&amp;');
+		
+		$tpl->set( '[vk]', "" );
+		$tpl->set( '[/vk]', "" );
+		$tpl->set( '{vk_url}', $vk_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[vk\\](.*?)\\[/vk\\]'si", "" );
+		$tpl->set( '{vk_url}', '' );
+	}
+
+	if ( $social_config['od'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['odid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=od",
+			'scope' => 'VALUABLE_ACCESS;GET_EMAIL',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$odnoklassniki_url = 'https://connect.ok.ru/oauth/authorize'.'?' . http_build_query($social_params, '', '&amp;');
+		
+		$tpl->set( '[odnoklassniki]', "" );
+		$tpl->set( '[/odnoklassniki]', "" );
+		$tpl->set( '{odnoklassniki_url}', $odnoklassniki_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[odnoklassniki\\](.*?)\\[/odnoklassniki\\]'si", "" );
+		$tpl->set( '{odnoklassniki_url}', '' );
+	}
+
+	if ( $social_config['fc'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['fcid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=fc",
+			'scope' => 'public_profile,email',
+			'display' => 'popup',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$facebook_url = 'https://www.facebook.com/dialog/oauth'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[facebook]', "" );
+		$tpl->set( '[/facebook]', "" );
+		$tpl->set( '{facebook_url}', $facebook_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[facebook\\](.*?)\\[/facebook\\]'si", "" );
+		$tpl->set( '{facebook_url}', '' );
+	}
+
+
+	if ( $social_config['google'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['googleid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=google",
+			'scope'         => 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$google_url = 'https://accounts.google.com/o/oauth2/auth'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[google]', "" );
+		$tpl->set( '[/google]', "" );
+		$tpl->set( '{google_url}', $google_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[google\\](.*?)\\[/google\\]'si", "" );
+		$tpl->set( '{google_url}', '' );
+	}
+
+	if ( $social_config['mailru'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['mailruid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=mailru",
+			'scope'         => 'userinfo',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$mailru_url = 'https://oauth.mail.ru/login'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[mailru]', "" );
+		$tpl->set( '[/mailru]', "" );
+		$tpl->set( '{mailru_url}', $mailru_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[mailru\\](.*?)\\[/mailru\\]'si", "" );
+		$tpl->set( '{mailru_url}', '' );
+	}
+
+	if ( $social_config['yandex'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['yandexid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=yandex",
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$yandex_url = 'https://oauth.yandex.ru/authorize'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[yandex]', "" );
+		$tpl->set( '[/yandex]', "" );
+		$tpl->set( '{yandex_url}', $yandex_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[yandex\\](.*?)\\[/yandex\\]'si", "" );
+		$tpl->set( '{yandex_url}', '' );
+	}
+
+} else {
+
+	$_SESSION['state'] = false;
+
+	$tpl->set_block( "'\\[vk\\](.*?)\\[/vk\\]'si", "" );
+	$tpl->set( '{vk_url}', '' );
+	$tpl->set_block( "'\\[odnoklassniki\\](.*?)\\[/odnoklassniki\\]'si", "" );
+	$tpl->set( '{odnoklassniki_url}', '' );
+	$tpl->set_block( "'\\[facebook\\](.*?)\\[/facebook\\]'si", "" );
+	$tpl->set( '{facebook_url}', '' );
+	$tpl->set_block( "'\\[google\\](.*?)\\[/google\\]'si", "" );
+	$tpl->set( '{google_url}', '' );
+	$tpl->set_block( "'\\[mailru\\](.*?)\\[/mailru\\]'si", "" );
+	$tpl->set( '{mailru_url}', '' );
+	$tpl->set_block( "'\\[yandex\\](.*?)\\[/yandex\\]'si", "" );
+	$tpl->set( '{yandex_url}', '' );
+}
+
+if( $user_group[$member_id['user_group']]['icon'] ) $tpl->set( '{group-icon}', "<img src=\"" . $user_group[$member_id['user_group']]['icon'] . "\" alt=\"\" />" );
+else $tpl->set( '{group-icon}', "" );
+
+if ( $user_group[$member_id['user_group']]['allow_admin'] ) {
+	$tpl->set( '[admin-link]', "" );
+	$tpl->set( '[/admin-link]', "" );
+	$tpl->set( '{admin-link}', $config['http_home_url'] . $config['admin_path'] . "?mod=main" );
+} else {
+	$tpl->set( '{admin-link}', "" );
+	$tpl->set_block( "'\\[admin-link\\](.*?)\\[/admin-link\\]'si", "" );
+}
+
+if ($config['allow_alt_url']) {
+	
+	$tpl->set( '{profile-link}', $config['http_home_url'] . "user/" . urlencode ( $member_id['name'] ) . "/" );
+	$tpl->set( '{stats-link}', $config['http_home_url'] . "statistics.html" );
+	$tpl->set( '{addnews-link}', $config['http_home_url'] . "addnews.html" );
+	$tpl->set( '{favorites-link}', $config['http_home_url'] . "favorites/" );
+	$tpl->set( '{newposts-link}', $config['http_home_url'] . "newposts/" );
+
+} else {
+	$tpl->set( '{profile-link}', $PHP_SELF . "?subaction=userinfo&user=" . urlencode ( $member_id['name'] ) );
+	$tpl->set( '{stats-link}', $PHP_SELF . "?do=stats" );
+	$tpl->set( '{addnews-link}', $PHP_SELF . "?do=addnews" );
+	$tpl->set( '{favorites-link}', $PHP_SELF . "?do=favorites" );
+	$tpl->set( '{newposts-link}', $PHP_SELF . "?subaction=newposts" );
+
+}
+
+if ($is_logged AND strpos( $tpl->copy_template, "[xfvalue_" ) !== false) {
+
+	$xfields = xfieldsload( true );
+	$xfieldsdata = xfieldsdataload( $member_id['xfields'] );
+
+	foreach ( $xfields as $value ) {
+		$preg_safe_name = preg_quote( $value[0], "'" );
+
+		if( empty( $xfieldsdata[$value[0]] ) ) {
+
+			$tpl->copy_template = preg_replace( "'\\[xfgiven_{$preg_safe_name}\\](.*?)\\[/xfgiven_{$preg_safe_name}\\]'is", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[xfnotgiven_{$value[0]}]", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[/xfnotgiven_{$value[0]}]", "", $tpl->copy_template );
+
+		} else {
+			$tpl->copy_template = preg_replace( "'\\[xfnotgiven_{$preg_safe_name}\\](.*?)\\[/xfnotgiven_{$preg_safe_name}\\]'is", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[xfgiven_{$value[0]}]", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[/xfgiven_{$value[0]}]", "", $tpl->copy_template );
+		}
+
+		$tpl->set( "[xfvalue_{$value[0]}]", stripslashes( $xfieldsdata[$value[0]] ));
+
+	}
+
+} else {
+
+	$tpl->copy_template = preg_replace( "'\\[xfgiven_(.*?)\\](.*?)\\[/xfgiven_(.*?)\\]'is", "", $tpl->copy_template );
+	$tpl->copy_template = preg_replace( "'\\[xfvalue_(.*?)\\]'i", "", $tpl->copy_template );
+	$tpl->copy_template = preg_replace( "'\\[xfnotgiven_(.*?)\\](.*?)\\[/xfnotgiven_(.*?)\\]'is", "", $tpl->copy_template );
+
+}
+
+$tpl->compile( 'login_panel' );]]></searchcode>
+			<replacecode><![CDATA[$tpl->load_template( 'userinfo-mobile.tpl' );
+
+$tpl->set( '{login-method}', $config['auth_metod'] ? "E-Mail:" : $lang['login_metod'] );
+$tpl->set( '{registration-link}', $PHP_SELF . "?do=register" );
+$tpl->set( '{lostpassword-link}', $PHP_SELF . "?do=lostpassword" );
+$tpl->set( '{logout-link}', $PHP_SELF . "?action=logout" );
+$tpl->set( '{pm-link}', $PHP_SELF . "?do=pm" );
+$tpl->set( '{group}', $user_group[$member_id['user_group']]['group_prefix'].$user_group[$member_id['user_group']]['group_name'].$user_group[$member_id['user_group']]['group_suffix'] );
+
+if ($is_logged) {
+
+	$tpl->set( '{login}', $member_id['name'] );
+	$tpl->set( '{new-pm}', $member_id['pm_unread'] );
+	$tpl->set( '{all-pm}', $member_id['pm_all'] );
+
+	if ($member_id['favorites']) {
+	    $tpl->set( '{favorite-count}', count(explode("," ,$member_id['favorites'])) );
+	} else $tpl->set( '{favorite-count}', '0' );
+
+	if ( count(explode("@", $member_id['foto'])) == 2 ) {
+		
+		$tpl->set( '{foto}', 'https://www.gravatar.com/avatar/' . md5(trim($member_id['foto'])) . '?s=' . intval($user_group[$member_id['user_group']]['max_foto']) );
+		
+	} else {
+		
+		if( $member_id['foto'] ) {
+			
+			if (strpos($member_id['foto'], "//") === 0) $avatar = "http:".$member_id['foto']; else $avatar = $member_id['foto'];
+
+			$avatar = @parse_url ( $avatar );
+
+			if( $avatar['host'] ) {
+				
+				$tpl->set( '{foto}', $member_id['foto'] );
+				
+			} else $tpl->set( '{foto}', $config['http_home_url'] . "uploads/fotos/" . $member_id['foto'] );
+			
+			unset($avatar);
+			
+		} else $tpl->set( '{foto}', "{THEME}/dleimages/noavatar.png" );
+	}
+
+} else {
+	
+	$member_id['name'] ='';
+	$tpl->set( '{login}', '' );
+	$tpl->set( '{new-pm}', '0' );
+	$tpl->set( '{all-pm}', '0' );
+	$tpl->set( '{favorite-count}', '0' );
+	$tpl->set( '{foto}', "{THEME}/dleimages/noavatar.png" );
+
+}
+
+if($config['allow_social'] AND $config['allow_registration']) {
+
+	include_once (ENGINE_DIR . '/data/socialconfig.php');
+
+	if( !isset($_SESSION['state']) OR (isset($_SESSION['state']) AND !$_SESSION['state']) ) $_SESSION['state'] = md5(uniqid(rand(), TRUE));
+
+	if (strpos($config['http_home_url'], "//") === 0) $return_domain = "https:".$config['http_home_url'];
+	elseif (strpos($config['http_home_url'], "/") === 0) $return_domain = "https://".$_SERVER['HTTP_HOST'].$config['http_home_url'];
+	else  $return_domain = $config['http_home_url'];
+	
+	if ( $social_config['vk'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['vkid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=vk",
+			'scope' => 'offline,email',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code',
+			'v'  => '5.90'
+		);
+		
+		$vk_url = 'https://oauth.vk.com/authorize'.'?' . http_build_query($social_params, '', '&amp;');
+		
+		$tpl->set( '[vk]', "" );
+		$tpl->set( '[/vk]', "" );
+		$tpl->set( '{vk_url}', $vk_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[vk\\](.*?)\\[/vk\\]'si", "" );
+		$tpl->set( '{vk_url}', '' );
+	}
+
+	if ( $social_config['od'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['odid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=od",
+			'scope' => 'VALUABLE_ACCESS;GET_EMAIL',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$odnoklassniki_url = 'https://connect.ok.ru/oauth/authorize'.'?' . http_build_query($social_params, '', '&amp;');
+		
+		$tpl->set( '[odnoklassniki]', "" );
+		$tpl->set( '[/odnoklassniki]', "" );
+		$tpl->set( '{odnoklassniki_url}', $odnoklassniki_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[odnoklassniki\\](.*?)\\[/odnoklassniki\\]'si", "" );
+		$tpl->set( '{odnoklassniki_url}', '' );
+	}
+
+	if ( $social_config['fc'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['fcid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=fc",
+			'scope' => 'public_profile,email',
+			'display' => 'popup',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$facebook_url = 'https://www.facebook.com/dialog/oauth'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[facebook]', "" );
+		$tpl->set( '[/facebook]', "" );
+		$tpl->set( '{facebook_url}', $facebook_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[facebook\\](.*?)\\[/facebook\\]'si", "" );
+		$tpl->set( '{facebook_url}', '' );
+	}
+
+
+	if ( $social_config['google'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['googleid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=google",
+			'scope'         => 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$google_url = 'https://accounts.google.com/o/oauth2/auth'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[google]', "" );
+		$tpl->set( '[/google]', "" );
+		$tpl->set( '{google_url}', $google_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[google\\](.*?)\\[/google\\]'si", "" );
+		$tpl->set( '{google_url}', '' );
+	}
+
+	if ( $social_config['mailru'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['mailruid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=mailru",
+			'scope'         => 'userinfo',
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$mailru_url = 'https://oauth.mail.ru/login'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[mailru]', "" );
+		$tpl->set( '[/mailru]', "" );
+		$tpl->set( '{mailru_url}', $mailru_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[mailru\\](.*?)\\[/mailru\\]'si", "" );
+		$tpl->set( '{mailru_url}', '' );
+	}
+
+	if ( $social_config['yandex'] ) {
+
+		$social_params = array(
+			'client_id'     => $social_config['yandexid'],
+			'redirect_uri'  => $return_domain . "index.php?do=auth-social&provider=yandex",
+			'state' => $_SESSION['state'],
+			'response_type' => 'code'
+		);
+
+		$yandex_url = 'https://oauth.yandex.ru/authorize'.'?' . http_build_query($social_params, '', '&amp;');
+		$tpl->set( '[yandex]', "" );
+		$tpl->set( '[/yandex]', "" );
+		$tpl->set( '{yandex_url}', $yandex_url );
+
+	} else {
+
+		$tpl->set_block( "'\\[yandex\\](.*?)\\[/yandex\\]'si", "" );
+		$tpl->set( '{yandex_url}', '' );
+	}
+
+} else {
+
+	$_SESSION['state'] = false;
+
+	$tpl->set_block( "'\\[vk\\](.*?)\\[/vk\\]'si", "" );
+	$tpl->set( '{vk_url}', '' );
+	$tpl->set_block( "'\\[odnoklassniki\\](.*?)\\[/odnoklassniki\\]'si", "" );
+	$tpl->set( '{odnoklassniki_url}', '' );
+	$tpl->set_block( "'\\[facebook\\](.*?)\\[/facebook\\]'si", "" );
+	$tpl->set( '{facebook_url}', '' );
+	$tpl->set_block( "'\\[google\\](.*?)\\[/google\\]'si", "" );
+	$tpl->set( '{google_url}', '' );
+	$tpl->set_block( "'\\[mailru\\](.*?)\\[/mailru\\]'si", "" );
+	$tpl->set( '{mailru_url}', '' );
+	$tpl->set_block( "'\\[yandex\\](.*?)\\[/yandex\\]'si", "" );
+	$tpl->set( '{yandex_url}', '' );
+}
+
+if( $user_group[$member_id['user_group']]['icon'] ) $tpl->set( '{group-icon}', "<img src=\"" . $user_group[$member_id['user_group']]['icon'] . "\" alt=\"\" />" );
+else $tpl->set( '{group-icon}', "" );
+
+if ( $user_group[$member_id['user_group']]['allow_admin'] ) {
+	$tpl->set( '[admin-link]', "" );
+	$tpl->set( '[/admin-link]', "" );
+	$tpl->set( '{admin-link}', $config['http_home_url'] . $config['admin_path'] . "?mod=main" );
+} else {
+	$tpl->set( '{admin-link}', "" );
+	$tpl->set_block( "'\\[admin-link\\](.*?)\\[/admin-link\\]'si", "" );
+}
+
+if ($config['allow_alt_url']) {
+	
+	$tpl->set( '{profile-link}', $config['http_home_url'] . "user/" . urlencode ( $member_id['name'] ) . "/" );
+	$tpl->set( '{stats-link}', $config['http_home_url'] . "statistics.html" );
+	$tpl->set( '{addnews-link}', $config['http_home_url'] . "addnews.html" );
+	$tpl->set( '{favorites-link}', $config['http_home_url'] . "favorites/" );
+	$tpl->set( '{newposts-link}', $config['http_home_url'] . "newposts/" );
+
+} else {
+	$tpl->set( '{profile-link}', $PHP_SELF . "?subaction=userinfo&user=" . urlencode ( $member_id['name'] ) );
+	$tpl->set( '{stats-link}', $PHP_SELF . "?do=stats" );
+	$tpl->set( '{addnews-link}', $PHP_SELF . "?do=addnews" );
+	$tpl->set( '{favorites-link}', $PHP_SELF . "?do=favorites" );
+	$tpl->set( '{newposts-link}', $PHP_SELF . "?subaction=newposts" );
+
+}
+
+if ($is_logged AND strpos( $tpl->copy_template, "[xfvalue_" ) !== false) {
+
+	$xfields = xfieldsload( true );
+	$xfieldsdata = xfieldsdataload( $member_id['xfields'] );
+
+	foreach ( $xfields as $value ) {
+		$preg_safe_name = preg_quote( $value[0], "'" );
+
+		if( empty( $xfieldsdata[$value[0]] ) ) {
+
+			$tpl->copy_template = preg_replace( "'\\[xfgiven_{$preg_safe_name}\\](.*?)\\[/xfgiven_{$preg_safe_name}\\]'is", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[xfnotgiven_{$value[0]}]", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[/xfnotgiven_{$value[0]}]", "", $tpl->copy_template );
+
+		} else {
+			$tpl->copy_template = preg_replace( "'\\[xfnotgiven_{$preg_safe_name}\\](.*?)\\[/xfnotgiven_{$preg_safe_name}\\]'is", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[xfgiven_{$value[0]}]", "", $tpl->copy_template );
+			$tpl->copy_template = str_replace( "[/xfgiven_{$value[0]}]", "", $tpl->copy_template );
+		}
+
+		$tpl->set( "[xfvalue_{$value[0]}]", stripslashes( $xfieldsdata[$value[0]] ));
+
+	}
+
+} else {
+
+	$tpl->copy_template = preg_replace( "'\\[xfgiven_(.*?)\\](.*?)\\[/xfgiven_(.*?)\\]'is", "", $tpl->copy_template );
+	$tpl->copy_template = preg_replace( "'\\[xfvalue_(.*?)\\]'i", "", $tpl->copy_template );
+	$tpl->copy_template = preg_replace( "'\\[xfnotgiven_(.*?)\\](.*?)\\[/xfnotgiven_(.*?)\\]'is", "", $tpl->copy_template );
+
+}
+
+$tpl->compile( 'login-mobile' );]]></replacecode>
+			<enabled>1</enabled>
+		</operation>
+	</file>
+</dleplugin>
